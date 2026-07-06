@@ -103,11 +103,43 @@ Prometheus metrics, and live Redis queue depth.
 `memory_used_mib` stays high even at idle — vLLM pre-allocates most of the
 GPU's VRAM for the KV cache on startup. This is expected, not a leak.
 
+## Getting Started
+
+### Prerequisites
+
+- `kubectl` configured against a Kubernetes cluster
+- An NVIDIA GPU node in that cluster with the **NVIDIA GPU Operator**
+  installed (device plugin + DCGM Exporter) — this is what exposes
+  `nvidia.com/gpu` as a schedulable resource and provides the GPU metrics
+  endpoint the backend scrapes
+- Enough GPU VRAM to load Qwen2.5-7B-Instruct (~24GB+ recommended — vLLM
+  will pre-allocate most of whatever is available for its KV cache)
+
+### Clone the repo
+
+```bash
+git clone https://github.com/<your-username>/gpu-llm-router.git
+cd gpu-llm-router
+```
+
+### Repo layout
+
+```
+gpu-llm-router/
+├── backend/
+│   ├── main.py           # FastAPI app + Redis queue worker
+│   └── requirements.txt
+├── k8s/
+│   ├── vllm.yaml         # vLLM Deployment + Service
+│   ├── redis.yaml        # Redis Deployment + Service
+│   └── api.yaml          # Backend Deployment + Service
+└── README.md
+```
+
 ## Deployment
 
-Requires a Kubernetes cluster with an NVIDIA GPU node, the NVIDIA GPU
-Operator (device plugin + DCGM Exporter) already installed, and `kubectl`
-access.
+With the repo cloned and the prerequisites above in place, deploy the three
+components in order:
 
 ```bash
 # 1. Deploy vLLM (downloads the model on first start — can take several minutes)
@@ -118,10 +150,10 @@ kubectl apply -f k8s/redis.yaml
 
 # 3. Deploy the backend
 #    The backend's code is injected via ConfigMap rather than a custom
-#    Docker image, so build the ConfigMap first:
+#    Docker image, so build the ConfigMap first (run from the repo root):
 kubectl create configmap backend-code \
-  --from-file=main.py=main.py \
-  --from-file=requirements.txt=requirements.txt
+  --from-file=main.py=backend/main.py \
+  --from-file=requirements.txt=backend/requirements.txt
 
 kubectl apply -f k8s/api.yaml
 ```
